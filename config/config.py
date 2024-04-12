@@ -24,8 +24,6 @@ class Config:
     today_mdb: str
     carts_today_mdb: str
 
-    employees: list
-    admins: list
     count_carts: int
 
 
@@ -36,8 +34,6 @@ def load_config() -> Config:
     return Config(
         tg_bot=TgBot(token=env("TOKEN")),
         redis=Redis(host=f"{env('redis_host')}"),
-        employees=[int(f"{env(f'employee_{i}')}") for i in range(1, 3)],
-        admins=[int(f"{env(f'admin_{i}')}") for i in range(1, 2)],
         user_db=env("user"),
         password_db=env("password"),
         database=env("database"),

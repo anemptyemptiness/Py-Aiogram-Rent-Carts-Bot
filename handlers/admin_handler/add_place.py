@@ -1,0 +1,240 @@
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from aiogram import F, Router
+from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
+
+from keyboards.adm_keyboard import create_admin_kb, check_add_place
+from keyboards.keyboard import create_cancel_kb
+from fsm.fsm import FSMAdmin
+from .add_employee import router_admin
+from db import DB
+from db import DB_mongo
+
+router_add_place = Router()
+router_admin.include_router(router_add_place)
+
+
+@router_add_place.callback_query(StateFilter(FSMAdmin.in_adm), F.data == "add_place")
+async def process_add_place_command(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer(
+        text="Чтобы добавить рабочую точку, Вам нужно "
+             "написать её название\n\n"
+             "<em>Например: Мега Белая Дача</em>\n\n"
+             "Пожалуйста, пишите название корректно",
+        parse_mode="html",
+    )
+    await callback.answer()
+    await state.set_state(FSMAdmin.add_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.add_place), F.text)
+async def process_collect_place_command(message: Message, state: FSMContext):
+    await state.update_data(title=message.text)
+    await message.answer(
+        text="Теперь введите id чата, куда Бот будет присылать отчёты сотрудников\n\n"
+             "Сервис по поиску id - @getmyid_bot\n\n"
+             "<em>Пример id: -1009284727</em>",
+        parse_mode="html",
+    )
+    await state.set_state(FSMAdmin.add_place_id)
+
+
+@router_admin.message(StateFilter(FSMAdmin.add_place))
+async def warning_collect_place_command(message: Message):
+    await message.answer(
+        text="Чтобы добавить рабочую точку, Вам нужно "
+             "написать её <b>название</b>\n\n"
+             "<em>Например: Мега Белая Дача</em>\n\n"
+             "Пожалуйста, пишите название корректно",
+        reply_markup=create_cancel_kb(),
+        parse_mode="html",
+    )
+
+
+@router_admin.message(StateFilter(FSMAdmin.add_place_id), F.text)
+async def process_collect_place_id_chat_command(message: Message, state: FSMContext):
+    await state.update_data(chat_id=int(message.text))
+
+    await message.answer(
+        text="Введите количество тележек на прокат на этой точке <b>числом</b>!\n\n"
+             "Если количество тележек пока неизвестно - напишите 0\n"
+             'Тележки всегда можно добавить по кнопке "Добавить точку"',
+        parse_mode="html",
+    )
+
+    await state.set_state(FSMAdmin.add_place_count_carts)
+
+
+@router_admin.message(StateFilter(FSMAdmin.add_place_id))
+async def warning_collect_place_id_chat_command(message: Message):
+    await message.answer(
+        text="Теперь введите id чата <b>ЧИСЛОМ</b>, куда Бот будет присылать отчёты сотрудников\n\n"
+             "Сервис по поиску id - @getmyid_bot\n\n"
+             "<em>Пример id: -1009284727</em>",
+        parse_mode="html",
+    )
+
+
+@router_admin.message(StateFilter(FSMAdmin.add_place_count_carts), F.text.isdigit())
+async def process_collect_place_count_carts_command(message: Message, state: FSMContext):
+    await state.update_data(count_carts=int(message.text))
+
+    data = await state.get_data()
+
+    await message.answer(
+        text="Данные:\n"
+             f"название: {data['title']}\n"
+             f"chat_id: {data['chat_id']}\n"
+             f"количество тележек: {data['count_carts']}\n\n"
+             f"Всё ли корректно?",
+        reply_markup=check_add_place(),
+    )
+    await state.set_state(FSMAdmin.check_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.add_place_count_carts))
+async def warning_collect_place_count_carts_command(message: Message):
+    await message.answer(
+        text="Введите количество тележек на точке <b>числом</b>!",
+        parse_mode="html",
+    )
+
+
+@router_admin.callback_query(StateFilter(FSMAdmin.check_place), F.data == "access_place")
+async def process_accept_place_command(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+
+    DB.add_place(
+        title=data["title"],
+        chat_id=data["chat_id"],
+        count_carts=data["count_carts"],
+    )
+
+    await callback.message.answer(
+        text=f'Рабочая точка "{data["title"]}" с chat_id={data["chat_id"]} '
+             f'и с {data["count_carts"]} тележками <b>успешно</b> добавлена!',
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode="html",
+    )
+
+    DB_mongo.reset_carts_from_place(place=data['title'])
+
+    await callback.message.answer(
+        text="Админская панель:",
+        reply_markup=create_admin_kb(),
+    )
+    await callback.answer()
+    await state.set_state(FSMAdmin.in_adm)
+
+
+@router_admin.callback_query(StateFilter(FSMAdmin.check_place), F.data == "rename_place")
+async def process_rename_place_command(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer(
+        text="Введите новое <b>название</b> рабочей точки\n\n"
+             "<em>Например: Мега Белая Дача</em>\n\n"
+             "Пожалуйста, пишите название корректно",
+        parse_mode="html",
+    )
+    await callback.answer()
+    await state.set_state(FSMAdmin.rename_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.rename_place), F.text)
+async def process_accept_renamed_place_command(message: Message, state: FSMContext):
+    await state.update_data(title=message.text)
+
+    data = await state.get_data()
+
+    await message.answer(
+        text="Данные:\n"
+             f"название: {data['title']}\n"
+             f"chat_id: {data['chat_id']}\n"
+             f"количество тележек: {data['count_carts']}\n\n"
+             f"Всё ли корректно?",
+        reply_markup=check_add_place(),
+    )
+    await state.set_state(FSMAdmin.check_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.rename_place))
+async def warning_accept_renamed_place_command(message: Message):
+    await message.answer(
+        text="Введите новое <b>название</b> рабочей точки\n\n"
+             "<em>Например: Мега Белая Дача</em>\n\n"
+             "Пожалуйста, пишите название корректно",
+        parse_mode="html",
+    )
+
+
+@router_admin.callback_query(StateFilter(FSMAdmin.check_place), F.data == "reid_place")
+async def process_reid_place_chat_command(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer(
+        text="Введите новый <b>id чата</b> рабочей точки, куда Бот будет отправлять отчёты сотрудников\n\n"
+             "Сервис по поиску chat_id - @getmyid_bot\n\n"
+             "<em>Пример id чата: -1009284727</em>",
+        parse_mode="html",
+    )
+    await callback.answer()
+    await state.set_state(FSMAdmin.reid_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.reid_place), F.text)
+async def process_accept_reid_chat_command(message: Message, state: FSMContext):
+    await state.update_data(chat_id=int(message.text))
+
+    data = await state.get_data()
+
+    await message.answer(
+        text="Данные:\n"
+             f"название: {data['title']}\n"
+             f"chat_id: {data['chat_id']}\n"
+             f"количество тележек: {data['count_carts']}\n\n"
+             f"Всё ли корректно?",
+        reply_markup=check_add_place(),
+    )
+    await state.set_state(FSMAdmin.check_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.reid_place))
+async def warning_reid_place_chat_command(message: Message):
+    await message.answer(
+        text="Введите новый id чата <b>ЧИСЛОМ</b>\n\n"
+             "Сервис по поиску chat_id - @getmyid_bot\n\n"
+             "<em>Пример id чата: -1009284727</em>",
+        parse_mode="html",
+    )
+
+
+@router_admin.callback_query(StateFilter(FSMAdmin.check_place), F.data == "recount_place")
+async def process_recount_place_chat_command(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer(
+        text="Введите новое количество тележек <b>числом</b>",
+        parse_mode="html",
+    )
+    await callback.answer()
+    await state.set_state(FSMAdmin.recount_carts_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.recount_carts_place), F.text.isdigit())
+async def process_accept_recount_place_chat_command(message: Message, state: FSMContext):
+    await state.update_data(count_carts=int(message.text))
+
+    data = await state.get_data()
+
+    await message.answer(
+        text="Данные:\n"
+             f"название: {data['title']}\n"
+             f"chat_id: {data['chat_id']}\n"
+             f"количество тележек: {data['count_carts']}\n\n"
+             f"Всё ли корректно?",
+        reply_markup=check_add_place(),
+    )
+    await state.set_state(FSMAdmin.check_place)
+
+
+@router_admin.message(StateFilter(FSMAdmin.recount_carts_place))
+async def warning_recount_place_chat_command(message: Message):
+    await message.answer(
+        text="Введите количество тележек <b>числом</b>",
+        parse_mode="html",
+    )
