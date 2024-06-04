@@ -19,6 +19,7 @@ def create_admin_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="Добавить точку", callback_data="add_place")],
             [InlineKeyboardButton(text="Удалить точку", callback_data="delete_place")],
             [InlineKeyboardButton(text="Список точек", callback_data="places_list")],
+            [InlineKeyboardButton(text="Статистика", callback_data="adm_stats")],
             [InlineKeyboardButton(text="Выход с админки", callback_data="adm_exit")],
         ]
     )
