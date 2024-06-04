@@ -144,3 +144,50 @@ def create_watching_places_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🠔 Назад", callback_data="go_back")],
         ]
     )
+
+
+def create_stats_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Посетители", callback_data="adm_stats_visitors")],
+            [InlineKeyboardButton(text="Выручка", callback_data="adm_stats_money")],
+            [
+                InlineKeyboardButton(text="➢ Назад", callback_data="adm_stats_back"),
+                InlineKeyboardButton(text="➢ Выход", callback_data="adm_exit")
+            ],
+        ]
+    )
+
+
+def create_stats_visitors_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Неделя", callback_data="adm_visitors_by_week"),
+                InlineKeyboardButton(text="Месяц", callback_data="adm_visitors_by_month"),
+                InlineKeyboardButton(text="Год", callback_data="adm_visitors_by_year")
+            ],
+            [InlineKeyboardButton(text="Задать дату вручную", callback_data="adm_visitors_by_custom")],
+            [
+                InlineKeyboardButton(text="➢ Назад", callback_data="adm_stats_visitors_back"),
+                InlineKeyboardButton(text="➢ Выход", callback_data="adm_exit")
+            ],
+        ]
+    )
+
+
+def create_stats_money_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Неделя", callback_data="adm_money_by_week"),
+                InlineKeyboardButton(text="Месяц", callback_data="adm_money_by_month"),
+                InlineKeyboardButton(text="Год", callback_data="adm_money_by_year")
+            ],
+            [InlineKeyboardButton(text="Задать дату вручную", callback_data="adm_money_by_custom")],
+            [
+                InlineKeyboardButton(text="➢ Назад", callback_data="adm_stats_money_back"),
+                InlineKeyboardButton(text="➢ Выход", callback_data="adm_exit")
+            ],
+        ]
+    )
