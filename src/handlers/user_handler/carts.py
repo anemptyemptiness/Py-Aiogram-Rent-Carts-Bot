@@ -15,12 +15,14 @@ from src.db.postgre.dao import AsyncOrm
 from src.keyboards.keyboard_carts import get_keyboard
 from src.keyboards.keyboard import create_places_kb, create_cancel_kb
 from src.lexicon.lexicon_ru import TO_RENTING, TO_FREE, RUSSIAN_WEEK_DAYS
+from src.middlewares.throttling_middleware import ThrottlingMiddleware
 from src.fsm.fsm import FSMCarts
 from src.config import settings
 from src.db import cached_places
 import logging
 
 router_carts = Router()
+router_carts.callback_query.middleware(middleware=ThrottlingMiddleware())
 logger = logging.getLogger(__name__)
 
 
