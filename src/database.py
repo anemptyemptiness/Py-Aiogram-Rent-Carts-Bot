@@ -4,7 +4,6 @@ from src.config import settings
 
 async_engine = create_async_engine(
     settings.get_url_asyncpg,
-    echo=True,
 )
 
 async_session = async_sessionmaker(bind=async_engine)

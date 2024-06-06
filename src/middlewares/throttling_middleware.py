@@ -4,7 +4,7 @@ from aiogram import BaseMiddleware, Bot
 from aiogram.types import CallbackQuery, TelegramObject, User
 from cachetools import TTLCache
 
-CACHE = TTLCache(maxsize=5000, ttl=3)
+CACHE = TTLCache(maxsize=5000, ttl=2)
 
 
 class ThrottlingMiddleware(BaseMiddleware):
