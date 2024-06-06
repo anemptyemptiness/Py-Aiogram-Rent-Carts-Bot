@@ -258,14 +258,14 @@ class AsyncOrm:
         async with async_session() as session:
             query = (
                 select(
-                    Places.title,
-                    Employees.fullname,
+                    func.coalesce(Places.title, 'удаленная точка'),
+                    func.coalesce(Employees.fullname, 'удаленный сотр.'),
                     Reports.user_id,
                     func.concat(func.sum(func.cast(Reports.revenue, Numeric))),
                 )
                 .select_from(Reports)
-                .join(Reports.place)
-                .join(Reports.employee)
+                .join(Reports.place, isouter=True)
+                .join(Reports.employee, isouter=True)
                 .filter(
                     Reports.report_date.between(date_from, date_to),
                 )

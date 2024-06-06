@@ -5,7 +5,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.state import default_state
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import ReplyKeyboardRemove
 
 from src.db import DB_mongo
@@ -173,8 +173,8 @@ async def process_report_carts_command(callback: CallbackQuery, state: FSMContex
             text="Вы вернулись в главное меню",
         )
         await callback.answer()
-    except TelegramBadRequest as e:
-        logger.exception("Ошибка в команде /carts при попытке отправки отчета")
+    except TelegramAPIError as e:
+        logger.exception("Ошибка с телеграм в carts.py")
         await callback.message.bot.send_message(
             text="Ошибка при отправке отчета с тележками\n"
                  "Команда: /carts\n\n"
@@ -182,14 +182,22 @@ async def process_report_carts_command(callback: CallbackQuery, state: FSMContex
             chat_id=settings.ADMIN_ID,
             reply_markup=ReplyKeyboardRemove()
         )
+        await callback.message.answer(
+            text="Упс... что-то пошло не так, сообщите руководству!",
+            reply_markup=ReplyKeyboardRemove(),
+        )
     except Exception as e:
-        logger.exception("Ошибка в команде /carts при попытке отправки отчета")
+        logger.exception("Ошибка не с телеграм в carts.py")
         await callback.message.bot.send_message(
             text="Ошибка при отправке отчета с тележками\n"
                  "Команда: /carts\n\n"
                  f"{e}",
             chat_id=settings.ADMIN_ID,
             reply_markup=ReplyKeyboardRemove()
+        )
+        await callback.message.answer(
+            text="Упс... что-то пошло не так, сообщите руководству!",
+            reply_markup=ReplyKeyboardRemove(),
         )
 
 
