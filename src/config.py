@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     TOKEN: str
+
     ADMIN_ID: int
 
     REDIS_HOST: str
@@ -13,6 +14,8 @@ class Settings(BaseSettings):
     DB_NAME: str
     DB_HOST: str
     DB_PORT: int
+
+    DAYS_FOR_FINANCES_CHECK: int
 
     @property
     def get_url_asyncpg(self):
