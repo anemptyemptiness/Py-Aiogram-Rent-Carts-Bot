@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
+import pymongo.errors
 from pymongo import MongoClient
 
 from src.config import Settings
@@ -24,7 +25,7 @@ class MongoDB:
     def check_for_carts_today_collection_by_place(self, place):
         return True if self._carts_today.find_one({place: {"$exists": True}}) else False
 
-    async def update_carts_from_place(self, place):
+    async def reset_carts_from_place(self, place):
         carts_data = {}
         for i in range(1, await AsyncOrm.get_count_carts_from_place(title=place) + 1):
             cart_data = {
@@ -37,6 +38,14 @@ class MongoDB:
             {"$set": {place: carts_data}},
             upsert=True,
         )
+        
+    def drop_today_for_current_person_on_place(self, chat_id, place):
+        try:
+            self._today.delete_one(
+                {f"{place}._id": str(chat_id)},
+            )
+        except pymongo.errors.PyMongoError:
+            pass
 
     def reset_today_from_place(self, chat_id, place):
         self._today.update_one(

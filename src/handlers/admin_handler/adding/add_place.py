@@ -121,7 +121,7 @@ async def process_accept_place_command(callback: CallbackQuery, state: FSMContex
         parse_mode="html",
     )
 
-    await DB_mongo.update_carts_from_place(place=data['title'])
+    await DB_mongo.reset_carts_from_place(place=data['title'])
     DB_mongo.reset_today_from_place(chat_id=callback.message.chat.id, place=data['title'])
 
     await callback.message.answer(

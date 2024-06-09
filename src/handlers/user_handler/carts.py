@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
+import aiogram.exceptions
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.state import default_state
@@ -48,7 +49,7 @@ async def process_place_command(callback: CallbackQuery, callback_data: PlaceCal
 
     # если база пустая, то создаю для конкретной точки коллекцию с тележками
     if not DB_mongo.check_for_carts_today_collection_by_place(place=callback_data.title):
-        await DB_mongo.update_carts_from_place(place=callback_data.title)
+        await DB_mongo.reset_carts_from_place(place=callback_data.title)
         DB_mongo.reset_today_from_place(chat_id=callback.message.chat.id, place=callback_data.title)
 
     msg = await callback.message.answer(
@@ -88,21 +89,28 @@ async def process_carts_command(callback: CallbackQuery, callback_data: CartCall
             to_status=TO_FREE,
         )
 
-    DB_mongo.update_today(
-        place=callback_data.title_place,
-        message_id=callback.message.message_id,
-        chat_id=callback.message.chat.id,
-    )
-
     for chat_id, message_id in DB_mongo.get_inline_markup_message_chat_ids_from_place(place=callback_data.title_place):
-        await bot.edit_message_reply_markup(
-            chat_id=chat_id,
-            message_id=message_id,
-            reply_markup=await get_keyboard(place=callback_data.title_place),
-        )
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=await get_keyboard(place=callback_data.title_place),
+            )
+
+            DB_mongo.update_today(
+                place=callback_data.title_place,
+                message_id=callback.message.message_id,
+                chat_id=callback.message.chat.id,
+            )
+        except TelegramAPIError:
+            # Тут произошла попытка изменить сообщение у всех людей, кто есть в базе тележек.
+            # Причин, по которым что-то могло пойти не так - много.
+            # Поэтому ничего не буду обновлять, если что-то пошло не так у человека, который не
+            # использует команду /carts в данный момент.
+            pass
 
     await callback.answer(
-        text="Тележка арендована" if status == TO_RENTING else "Тележка освободилась"
+        text="Тележка арендована❌" if status == TO_RENTING else "Тележка освободилась✅"
     )
 
 
@@ -132,73 +140,68 @@ async def process_report_carts_command(callback: CallbackQuery, state: FSMContex
             report += f"🛒<b>Тележка {cart.split('_')[1]}</b>\n<b>└</b>"
             report += "<em>тележку не арендовывали</em>\n\n"
 
-    try:
-        await callback.message.bot.send_message(
-            chat_id=cached_places[place],
-            text=report,
-            parse_mode="html",
-        )
+    for chat_id, message_id in DB_mongo.get_inline_markup_message_chat_ids_from_place(place=place):
+        try:
+            await callback.message.bot.delete_message(
+                chat_id=chat_id,
+                message_id=message_id,
+            )
+            await DB_mongo.reset_carts_from_place(place=place)
+            DB_mongo.reset_today_from_place(
+                chat_id=callback.message.chat.id,
+                place=place,
+            )
+        except TelegramAPIError:
+            # Это значит, что у другого человека, который есть в базе тележек, не получилось удалить сообщение в боте.
+            # Причины могут быть разными, почему так вышло.
+            # Основная догадка - человек не в боте, человек не в телеграм, человек заблокировал бота и т.д.
+            #
+            # И поэтому на всякий случай мы обнуляем все значения чатов и id-сообщений для этого человека
+            # в базе тележек, и каждый раз будем это делать, чтобы работа бота не конфликтовала с пользователями,
+            # которые в данный момент не имеют непосредственного отношения к /carts в данный момент
+            DB_mongo.drop_today_for_current_person_on_place(
+                chat_id=chat_id,
+                place=place,
+            )
 
-        for chat_id, message_id in DB_mongo.get_inline_markup_message_chat_ids_from_place(place=place):
-            if chat_id != callback.message.chat.id:
-                await callback.message.bot.send_message(
-                    chat_id=chat_id,
-                    text="Был сформирован отчёт! Сообщение с тележками удалено, так как оно обнулилось",
-                )
-                await callback.message.bot.send_message(
-                    chat_id=chat_id,
-                    text='Напишите на кнопку <b>"Отмена"</b> ниже '
-                         'или напишите <b>"Отмена"</b>, чтобы вернуться в главное меню\n\n'
-                         'Если Вы не были ни в какой команде - проигнорируйте это сообщение!',
-                    reply_markup=create_cancel_kb(),
-                    parse_mode="html",
-                )
-                await callback.message.bot.delete_message(
-                    chat_id=chat_id,
-                    message_id=message_id,
-                )
+        if chat_id != callback.message.chat.id:
+            # если кнопку нажали, то для всех остальных людей, кто находится в базе тележек,
+            # но которые не пользовались командой, мы вышлем это:
+            await callback.message.bot.send_message(
+                chat_id=chat_id,
+                text="Был сформирован отчёт! Сообщение с тележками удалено, так как оно обнулилось",
+            )
+            await callback.message.bot.send_message(
+                chat_id=chat_id,
+                text='Напишите <b>"Отмена"</b> в чат или нажмите на кнопку ниже, чтобы вернуться в главное меню\n\n'
+                     'Если Вы не были ни в какой команде - проигнорируйте это сообщение!',
+                reply_markup=create_cancel_kb(),
+                parse_mode="html",
+            )
+        else:
+            # но если кнопку нажал человек, который пользовался командой, то для него вышлем успешное оформление
+            # отчета, вот такое:
+            await callback.message.answer(
+                text="Отчёт успешно отправлен!👍🏻",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            await callback.message.answer(
+                text="Я полностью обнулил все значения в таблице тележек⚠️"
+            )
+            await callback.message.answer(
+                text="Вы вернулись в главное меню",
+            )
 
-        await DB_mongo.update_carts_from_place(place=place)
-        DB_mongo.reset_today_from_place(chat_id=callback.message.chat.id, place=place)
+            await callback.message.bot.send_message(
+                chat_id=cached_places[place],
+                text=report,
+                parse_mode="html",
+            )
 
-        await state.clear()
-        await callback.message.answer(
-            text="Отчёт успешно отправлен!👍🏻",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        await callback.message.answer(
-            text="Я полностью обнулил все значения в таблице тележек⚠️"
-        )
-        await callback.message.answer(
-            text="Вы вернулись в главное меню",
-        )
-        await callback.answer()
-    except TelegramAPIError as e:
-        logger.exception("Ошибка с телеграм в carts.py")
-        await callback.message.bot.send_message(
-            text="Ошибка при отправке отчета с тележками\n"
-                 "Команда: /carts\n\n"
-                 f"{e}",
-            chat_id=settings.ADMIN_ID,
-            reply_markup=ReplyKeyboardRemove()
-        )
-        await callback.message.answer(
-            text="Упс... что-то пошло не так, сообщите руководству!",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-    except Exception as e:
-        logger.exception("Ошибка не с телеграм в carts.py")
-        await callback.message.bot.send_message(
-            text="Ошибка при отправке отчета с тележками\n"
-                 "Команда: /carts\n\n"
-                 f"{e}",
-            chat_id=settings.ADMIN_ID,
-            reply_markup=ReplyKeyboardRemove()
-        )
-        await callback.message.answer(
-            text="Упс... что-то пошло не так, сообщите руководству!",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+            # Вызываю эти методы только для того человека, который пользовался командой и нажал оформление отчета.
+            # Всем остальным людям нет смысла это высылать, им я вышлю кнопку, по которой они смогут выйти.
+            await callback.answer()
+            await state.clear()
 
 
 @router_carts.callback_query(StateFilter(FSMCarts.working_day), F.data == "go_back_to_menu")
@@ -218,6 +221,6 @@ async def process_go_back_to_menu_command(callback: CallbackQuery, state: FSMCon
 async def warning_working_day_command(message: Message):
     await message.answer(
         text="Не нужно ничего мне писать, нажимайте на кнопки тележек "
-             'или напишите <b>"Отмена"</b> или нажмите на кнопку <b>"Отмена"</b> ниже!',
+             'или напишите <b>"Отмена"</b> в чат',
         parse_mode="html",
     )

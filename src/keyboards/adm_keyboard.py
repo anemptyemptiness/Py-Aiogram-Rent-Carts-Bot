@@ -4,7 +4,6 @@ from src.callbacks.admin import AdminCallbackFactory
 from src.callbacks.place import PlaceCallbackFactory
 from src.db import DB
 from src.db.postgre.dao import AsyncOrm
-from src.db import cached_employees_fullname_and_id, cached_admins_fullname_and_id
 
 
 def create_admin_kb() -> InlineKeyboardMarkup:
@@ -134,7 +133,7 @@ def create_watching_employees_kb() -> InlineKeyboardMarkup:
 def create_watching_admins_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🠔 Назад", callback_data="go_back")],
+            [InlineKeyboardButton(text="➢ Назад", callback_data="go_back")],
         ]
     )
 
@@ -142,7 +141,7 @@ def create_watching_admins_kb() -> InlineKeyboardMarkup:
 def create_watching_places_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🠔 Назад", callback_data="go_back")],
+            [InlineKeyboardButton(text="➢ Назад", callback_data="go_back")],
         ]
     )
 
