@@ -203,17 +203,9 @@ async def process_report_carts_command(callback: CallbackQuery, state: FSMContex
                 # Всем остальным людям нет смысла это высылать, им я вышлю кнопку, по которой они смогут выйти.
                 await callback.answer()
         except TelegramAPIError as e:
-            logger.exception("Ошибка при отправке отчета в команде /carts")
-            await callback.message.answer(
-                text="Упс... что-то пошло не так при отправке отчета\n"
-                     "Пожалуйста, сообщите об этом руководству!",
-            )
-            await callback.message.bot.send_message(
-                text="Не получилось отправить отчет в команде /carts\n"
-                     f"С такого chat_id прилетела ошибка: {chat_id}\n\n"
-                     f"Ошибка: {e}",
-                chat_id=settings.ADMIN_ID,
-            )
+            # Ничего не делать, если у бота не получилось отправить отчет у человека,
+            # который не был на данный момент в боте
+            pass
         finally:
             await state.clear()
 
