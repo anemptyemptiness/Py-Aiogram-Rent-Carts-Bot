@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 from aiogram import Bot
 
 from src.config import settings
-from src.db.queries.dao.dao import AsyncOrm
+from src.db.postgre.dao import AsyncOrm
 import asyncio
 
 
